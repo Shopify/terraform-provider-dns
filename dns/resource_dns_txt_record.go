@@ -26,6 +26,11 @@ func resourceDnsTxtRecord() *schema.Resource {
 				Default:  false,
 			},
 
+			"record": &schema.Schema{
+				Type:     schema.TypeString,
+				Computed: true,
+			},
+
 			"records": &schema.Schema{
 				Type:     schema.TypeList,
 				Elem:     &schema.Schema{Type: schema.TypeString},
@@ -42,6 +47,9 @@ func resourceDnsTxtRecordCreate(d *schema.ResourceData, meta interface{}) error 
 		return err
 	}
 
+	if len(records) > 0 {
+		d.Set("record", records[0])
+	}
 	d.Set("records", records)
 	return nil
 }
@@ -54,6 +62,9 @@ func resourceDnsTxtRecordRead(d *schema.ResourceData, meta interface{}) error {
 			return err
 		}
 
+		if len(records) > 0 {
+			d.Set("record", records[0])
+		}
 		d.Set("records", records)
 	}
 	return nil
