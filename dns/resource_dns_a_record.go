@@ -9,7 +9,6 @@ import (
 func resourceDnsARecord() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDnsARecordCreate,
-		Update: resourceDnsARecordUpdate,
 		Read:   resourceDnsARecordRead,
 		Delete: resourceDnsARecordDelete,
 
@@ -42,10 +41,6 @@ func resourceDnsARecordRead(d *schema.ResourceData, meta interface{}) error {
 
 	d.Set("addrs", addrs)
 	return nil
-}
-
-func resourceDnsARecordUpdate(d *schema.ResourceData, meta interface{}) error {
-	return resourceDnsARecordRead(d, meta)
 }
 
 func resourceDnsARecordDelete(d *schema.ResourceData, meta interface{}) error {

@@ -9,7 +9,6 @@ import (
 func resourceDnsCnameRecord() *schema.Resource {
 	return &schema.Resource{
 		Create: resourceDnsCnameRecordCreate,
-		Update: resourceDnsCnameRecordUpdate,
 		Read:   resourceDnsCnameRecordRead,
 		Delete: resourceDnsCnameRecordDelete,
 
@@ -41,10 +40,6 @@ func resourceDnsCnameRecordRead(d *schema.ResourceData, meta interface{}) error 
 
 	d.Set("cname", cname)
 	return nil
-}
-
-func resourceDnsCnameRecordUpdate(d *schema.ResourceData, meta interface{}) error {
-	return resourceDnsCnameRecordRead(d, meta)
 }
 
 func resourceDnsCnameRecordDelete(d *schema.ResourceData, meta interface{}) error {
