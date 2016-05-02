@@ -1,0 +1,10 @@
+name: terraform-provider-dns
+
+up:
+  - go: 1.6.2
+
+commands:
+  build:
+    run: go build
+  test:
+    run: go test ./...
