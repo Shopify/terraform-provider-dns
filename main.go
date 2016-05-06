@@ -1,9 +1,8 @@
 package main
 
 import (
+	"./dns"
 	"github.com/hashicorp/terraform/plugin"
-
-	"github.com/Shopify/terraform-provider-dns/dns"
 )
 
 func main() {
