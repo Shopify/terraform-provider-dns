@@ -1,7 +1,7 @@
 name: terraform-provider-dns
 
 up:
-  - go: 1.6.2
+  - go: 1.7.1
 
 commands:
   build:
