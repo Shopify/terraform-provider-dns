@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform/config"
+	"github.com/mitchellh/copystructure"
 )
 
 // ResourceProvisionerConfig is used to pair a provisioner
@@ -42,21 +43,11 @@ type Resource struct {
 	State        *InstanceState
 	Provisioners []*ResourceProvisionerConfig
 	Flags        ResourceFlag
-	TaintedIndex int
 }
 
 // ResourceKind specifies what kind of instance we're working with, whether
 // its a primary instance, a tainted instance, or an orphan.
 type ResourceFlag byte
-
-const (
-	FlagPrimary ResourceFlag = 1 << iota
-	FlagTainted
-	FlagOrphan
-	FlagHasTainted
-	FlagReplacePrimary
-	FlagDeposed
-)
 
 // InstanceInfo is used to hold information about the instance and/or
 // resource being modified.
@@ -101,6 +92,45 @@ func NewResourceConfig(c *config.RawConfig) *ResourceConfig {
 	result := &ResourceConfig{raw: c}
 	result.interpolateForce()
 	return result
+}
+
+// DeepCopy performs a deep copy of the configuration. This makes it safe
+// to modify any of the structures that are part of the resource config without
+// affecting the original configuration.
+func (c *ResourceConfig) DeepCopy() *ResourceConfig {
+	// Copy, this will copy all the exported attributes
+	copy, err := copystructure.Config{Lock: true}.Copy(c)
+	if err != nil {
+		panic(err)
+	}
+
+	// Force the type
+	result := copy.(*ResourceConfig)
+
+	// For the raw configuration, we can just use its own copy method
+	result.raw = c.raw.Copy()
+
+	return result
+}
+
+// Equal checks the equality of two resource configs.
+func (c *ResourceConfig) Equal(c2 *ResourceConfig) bool {
+	// Two resource configs if their exported properties are equal.
+	// We don't compare "raw" because it is never used again after
+	// initialization and for all intents and purposes they are equal
+	// if the exported properties are equal.
+	check := [][2]interface{}{
+		{c.ComputedKeys, c2.ComputedKeys},
+		{c.Raw, c2.Raw},
+		{c.Config, c2.Config},
+	}
+	for _, pair := range check {
+		if !reflect.DeepEqual(pair[0], pair[1]) {
+			return false
+		}
+	}
+
+	return true
 }
 
 // CheckSet checks that the given list of configuration keys is
@@ -182,7 +212,8 @@ func (c *ResourceConfig) get(
 	}
 
 	var current interface{} = raw
-	for _, part := range parts {
+	var previous interface{} = nil
+	for i, part := range parts {
 		if current == nil {
 			return nil, false
 		}
@@ -190,12 +221,23 @@ func (c *ResourceConfig) get(
 		cv := reflect.ValueOf(current)
 		switch cv.Kind() {
 		case reflect.Map:
+			previous = current
 			v := cv.MapIndex(reflect.ValueOf(part))
 			if !v.IsValid() {
+				if i > 0 && i != (len(parts)-1) {
+					tryKey := strings.Join(parts[i:], ".")
+					v := cv.MapIndex(reflect.ValueOf(tryKey))
+					if !v.IsValid() {
+						return nil, false
+					}
+					return v.Interface(), true
+				}
+
 				return nil, false
 			}
 			current = v.Interface()
 		case reflect.Slice:
+			previous = current
 			if part == "#" {
 				current = cv.Len()
 			} else {
@@ -208,6 +250,14 @@ func (c *ResourceConfig) get(
 				}
 				current = cv.Index(int(i)).Interface()
 			}
+		case reflect.String:
+			// This happens when map keys contain "." and have a common
+			// prefix so were split as path components above.
+			actualKey := strings.Join(parts[i-1:], ".")
+			if prevMap, ok := previous.(map[string]interface{}); ok {
+				return prevMap[actualKey], true
+			}
+			return nil, false
 		default:
 			panic(fmt.Sprintf("Unknown kind: %s", cv.Kind()))
 		}
@@ -229,6 +279,6 @@ func (c *ResourceConfig) interpolateForce() {
 	}
 
 	c.ComputedKeys = c.raw.UnknownKeys()
-	c.Raw = c.raw.Raw
+	c.Raw = c.raw.RawMap()
 	c.Config = c.raw.Config()
 }

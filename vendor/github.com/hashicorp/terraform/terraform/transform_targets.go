@@ -37,11 +37,16 @@ func (t *TargetsTransformer) Transform(g *Graph) error {
 		}
 
 		for _, v := range g.Vertices() {
+			removable := false
 			if _, ok := v.(GraphNodeAddressable); ok {
-				if !targetedNodes.Include(v) {
-					log.Printf("[DEBUG] Removing %q, filtered by targeting.", dag.VertexName(v))
-					g.Remove(v)
-				}
+				removable = true
+			}
+			if vr, ok := v.(RemovableIfNotTargeted); ok {
+				removable = vr.RemoveIfNotTargeted()
+			}
+			if removable && !targetedNodes.Include(v) {
+				log.Printf("[DEBUG] Removing %q, filtered by targeting.", dag.VertexName(v))
+				g.Remove(v)
 			}
 		}
 	}
@@ -81,6 +86,15 @@ func (t *TargetsTransformer) selectTargetedNodes(
 			var err error
 			if t.Destroy {
 				deps, err = g.Descendents(v)
+
+				// Select any variables that we depend on in case we need them later for
+				// interpolating in the count
+				ancestors, _ := g.Ancestors(v)
+				for _, a := range ancestors.List() {
+					if _, ok := a.(*GraphNodeConfigVariableFlat); ok {
+						deps.Add(a)
+					}
+				}
 			} else {
 				deps, err = g.Ancestors(v)
 			}
@@ -109,4 +123,15 @@ func (t *TargetsTransformer) nodeIsTarget(
 		}
 	}
 	return false
+}
+
+// RemovableIfNotTargeted is a special interface for graph nodes that
+// aren't directly addressable, but need to be removed from the graph when they
+// are not targeted. (Nodes that are not directly targeted end up in the set of
+// targeted nodes because something that _is_ targeted depends on them.) The
+// initial use case for this interface is GraphNodeConfigVariable, which was
+// having trouble interpolating for module variables in targeted scenarios that
+// filtered out the resource node being referenced.
+type RemovableIfNotTargeted interface {
+	RemoveIfNotTargeted() bool
 }
